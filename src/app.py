@@ -1,5 +1,6 @@
 import pygame
 
+from src.ai import EASY, HARD, MEDIUM, choose_move
 from src.board import Board
 from src.constants import (
     BOARD_MARGIN_TOP,
@@ -8,18 +9,24 @@ from src.constants import (
     CELL_SIZE,
     COLOR_BG,
     COLOR_BUTTON,
+    COLOR_BUTTON_ACTIVE,
     COLOR_BUTTON_BORDER,
     COLOR_LINE,
     COLOR_O,
     COLOR_TEXT,
     COLOR_X,
+    EASY_RECT,
     EMPTY,
     FPS,
+    HARD_RECT,
     LINE_WIDTH,
     MARK_PADDING,
     MARK_WIDTH,
+    MEDIUM_RECT,
     PLAYER_O,
     PLAYER_X,
+    PVAI_RECT,
+    PVP_RECT,
     RESTART_RECT,
     WINDOW_HEIGHT,
     WINDOW_TITLE,
@@ -37,6 +44,8 @@ class App:
         self.small_font = pygame.font.Font(None, 28)
         self.board = Board()
         self.running = True
+        self.vs_ai = False
+        self.difficulty = EASY
 
     def run(self):
         while self.running:
@@ -56,27 +65,60 @@ class App:
                 self._handle_click(event.pos)
 
     def _handle_click(self, pos):
-        restart = pygame.Rect(*RESTART_RECT)
-        if restart.collidepoint(pos):
+        if pygame.Rect(*RESTART_RECT).collidepoint(pos):
             self.board.reset()
+            return
+        if pygame.Rect(*PVP_RECT).collidepoint(pos):
+            self.vs_ai = False
+            return
+        if pygame.Rect(*PVAI_RECT).collidepoint(pos):
+            self.vs_ai = True
+            self._maybe_ai_move()
+            return
+        if pygame.Rect(*EASY_RECT).collidepoint(pos):
+            self.difficulty = EASY
+            return
+        if pygame.Rect(*MEDIUM_RECT).collidepoint(pos):
+            self.difficulty = MEDIUM
+            return
+        if pygame.Rect(*HARD_RECT).collidepoint(pos):
+            self.difficulty = HARD
+            return
+
+        if self.vs_ai and self.board.current_player != PLAYER_X:
             return
 
         index = cell_index_from_pos(pos)
-        if index is not None:
-            self.board.place(index)
+        if index is None:
+            return
+        if self.board.place(index):
+            self._maybe_ai_move()
+
+    def _maybe_ai_move(self):
+        if not self.vs_ai or self.board.game_over:
+            return
+        if self.board.current_player != PLAYER_O:
+            return
+        legal = self.board.empty_cells()
+        move = choose_move(self.board.cells, PLAYER_O, self.difficulty)
+        if move not in legal:
+            return
+        self.board.place(move)
 
     def _draw(self):
         self.screen.fill(COLOR_BG)
         self._draw_status()
         self._draw_board()
         self._draw_marks()
-        self._draw_restart()
+        self._draw_controls()
 
     def _draw_status(self):
         if self.board.winner:
             text = f"{self.board.winner} wins"
         elif self.board.is_draw:
             text = "Draw"
+        elif self.vs_ai and self.board.current_player == PLAYER_O:
+            text = "Turn: O (AI)"
         else:
             text = f"Turn: {self.board.current_player}"
         surface = self.font.render(text, True, COLOR_TEXT)
@@ -118,12 +160,21 @@ class App:
             elif mark == PLAYER_O:
                 pygame.draw.ellipse(self.screen, COLOR_O, inner, MARK_WIDTH)
 
-    def _draw_restart(self):
-        rect = pygame.Rect(*RESTART_RECT)
-        pygame.draw.rect(self.screen, COLOR_BUTTON, rect)
+    def _draw_controls(self):
+        self._draw_button(PVP_RECT, "PvP", not self.vs_ai)
+        self._draw_button(PVAI_RECT, "PvAI", self.vs_ai)
+        self._draw_button(RESTART_RECT, "Restart", False)
+        self._draw_button(EASY_RECT, "Easy", self.difficulty == EASY)
+        self._draw_button(MEDIUM_RECT, "Medium", self.difficulty == MEDIUM)
+        self._draw_button(HARD_RECT, "Hard", self.difficulty == HARD)
+
+    def _draw_button(self, rect_tuple, label, active):
+        rect = pygame.Rect(*rect_tuple)
+        fill = COLOR_BUTTON_ACTIVE if active else COLOR_BUTTON
+        pygame.draw.rect(self.screen, fill, rect)
         pygame.draw.rect(self.screen, COLOR_BUTTON_BORDER, rect, 2)
-        label = self.small_font.render("Restart", True, COLOR_TEXT)
-        self.screen.blit(label, label.get_rect(center=rect.center))
+        text = self.small_font.render(label, True, COLOR_TEXT)
+        self.screen.blit(text, text.get_rect(center=rect.center))
 
 
 def cell_index_from_pos(pos):

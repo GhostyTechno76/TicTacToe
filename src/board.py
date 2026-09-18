@@ -39,6 +39,9 @@ class Board:
             self.current_player = PLAYER_O if self.current_player == PLAYER_X else PLAYER_X
         return True
 
+    def empty_cells(self):
+        return [i for i, mark in enumerate(self.cells) if mark == EMPTY]
+
     @property
     def game_over(self):
         return self.winner is not None or self.is_draw
